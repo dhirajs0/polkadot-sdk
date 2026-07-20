@@ -2266,3 +2266,75 @@ fn reclaim_bounty_funds_is_free_for_caller() {
 		);
 	});
 }
+
+// -----------------------------------------------------------------------------
+// Verification tests for the remaining review findings (against the current PR
+// code, i.e. `Fortitude::Force` and `TransferAllAssets = ()` for Instance1).
+// -----------------------------------------------------------------------------
+
+#[test]
+fn reclaim_bounty_funds_respects_native_locks() {
+	// Regression test for the `Fortitude::Force`/`Polite` mismatch.
+	//
+	// The sweep must compute the movable amount with the SAME fortitude that
+	// `fungible::Mutate::transfer` reduces with (`Polite`). Otherwise a locked/frozen account
+	// yields a `Force` amount larger than `transfer` will move, the transfer fails with
+	// `Frozen`, and everything is stranded (and the `TransferFungible` path reverts the whole
+	// extrinsic). With matched `Polite` fortitude the liquid part is reclaimed and the lock is
+	// respected, as the prdoc states.
+	use frame_support::traits::{LockableCurrency, WithdrawReasons};
+
+	ExtBuilder::default().build_and_execute(|| {
+		let bounty_account = Bounties::bounty_account_id(0);
+		let treasury = Bounties::account_id();
+
+		Balances::make_free_balance_be(&bounty_account, 100);
+		// Lock 60 of the 100 native; only the 40 liquid units should be reclaimable.
+		<Balances as LockableCurrency<_>>::set_lock(
+			*b"testlock",
+			&bounty_account,
+			60,
+			WithdrawReasons::all(),
+		);
+
+		let treasury_before = Balances::free_balance(&treasury);
+		assert!(!pallet_bounties::Bounties::<Test>::contains_key(0));
+		let res = Bounties::reclaim_bounty_funds(RuntimeOrigin::signed(1), 0);
+		assert_ok!(res.as_ref());
+
+		// Liquid part swept; locked part left behind.
+		assert_eq!(
+			Balances::free_balance(&treasury).saturating_sub(treasury_before),
+			40,
+			"the liquid remainder must be reclaimed",
+		);
+		assert_eq!(Balances::free_balance(&bounty_account), 60, "the lock must be respected");
+		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0 });
+		assert_eq!(res.unwrap().pays_fee, Pays::No);
+	});
+}
+
+#[test]
+fn finding4_unit_transferallassets_is_permanent_paid_noop() {
+	// Finding #4: with `TransferAllAssets = ()` (what Rococo wires, and Instance1 here),
+	// `force_transfer_all_assets` always returns Ok(false), so `reclaim_bounty_funds` is a
+	// permanent PAID no-op: it never moves funds and never emits the event, even when the
+	// bounty account is funded.
+	use frame_support::pallet_prelude::Pays;
+
+	ExtBuilder::default().build_and_execute(|| {
+		// Instance1 (`Bounties1`) is configured with `type TransferAllAssets = ()`.
+		let bounty_account = Bounties1::bounty_account_id(0);
+		Balances::make_free_balance_be(&bounty_account, 100);
+
+		assert!(!pallet_bounties::Bounties::<Test, pallet_bounties::Instance1>::contains_key(0));
+
+		let before = Balances::free_balance(&bounty_account);
+		let res = Bounties1::reclaim_bounty_funds(RuntimeOrigin::signed(1), 0);
+		assert_ok!(res.as_ref());
+
+		// Paid (not free) and funds untouched: the call can never reclaim anything on this config.
+		assert_eq!(res.unwrap().pays_fee, Pays::Yes, "the () config makes reclaim always paid");
+		assert_eq!(Balances::free_balance(&bounty_account), before, "funds are never reclaimed");
+	});
+}
