@@ -2045,7 +2045,7 @@ fn reclaim_bounty_funds_works_for_funded_bounty() {
 		// Anyone can call reclaim_bounty_funds.
 		assert_ok!(Bounties::reclaim_bounty_funds(RuntimeOrigin::signed(1), 0));
 
-		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0 },);
+		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0, amount: 50 },);
 
 		// Bounty account is now empty.
 		assert_eq!(Balances::free_balance(&bounty_account), 0);
@@ -2088,7 +2088,7 @@ fn reclaim_bounty_funds_works_after_accidental_refund() {
 
 		// Dust the account.
 		assert_ok!(Bounties::reclaim_bounty_funds(RuntimeOrigin::signed(99), 0));
-		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0 },);
+		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0, amount: 25 },);
 
 		assert_eq!(Balances::free_balance(&bounty_account), 0);
 		assert!(Treasury::pot() > treasury_before);
@@ -2177,7 +2177,7 @@ fn reclaim_bounty_funds_can_be_called_by_anyone() {
 
 		// A random account (2) with only 1 token should be able to call this.
 		assert_ok!(Bounties::reclaim_bounty_funds(RuntimeOrigin::signed(2), 0));
-		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0 },);
+		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0, amount: 50 },);
 	});
 }
 
@@ -2204,8 +2204,16 @@ fn reclaim_bounty_funds_works_with_additional_assets() {
 		let treasury_asset1_before = Assets::balance(1, &Bounties::account_id());
 
 		// A single call reclaims both the native token and asset 1.
+		let bounty_native_before = Balances::free_balance(&bounty_account);
 		assert_ok!(Bounties::reclaim_bounty_funds(RuntimeOrigin::signed(5), 0));
-		assert_eq!(last_event(), BountiesEvent::BountyFundsReclaimed { bounty_id: 0 },);
+		let bounty_native_after = Balances::free_balance(&bounty_account);
+		assert_eq!(
+			last_event(),
+			BountiesEvent::BountyFundsReclaimed {
+				bounty_id: 0,
+				amount: bounty_native_before - bounty_native_after
+			},
+		);
 
 		// Native balance drained to at most ED.
 		assert!(Balances::free_balance(&bounty_account) <= 1);

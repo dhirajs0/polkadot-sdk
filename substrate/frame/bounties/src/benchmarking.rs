@@ -406,17 +406,19 @@ mod benchmarks {
 		// transfers instead of being a no-op for runtimes with non-trivial TransferAllAssets.
 		T::TransferAllAssets::ensure_successful(&bounty_account);
 
-		assert!(
-			!T::Currency::free_balance(&bounty_account).is_zero(),
-			"Bounty account should have a balance to reclaim"
-		);
+		let native_before = T::Currency::free_balance(&bounty_account);
+		assert!(!native_before.is_zero(), "Bounty account should have a balance to reclaim");
 
 		let caller: T::AccountId = whitelisted_caller();
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), bounty_id);
 
-		assert_last_event::<T, I>(Event::BountyFundsReclaimed { bounty_id }.into());
+		let native_after = T::Currency::free_balance(&bounty_account);
+		assert_last_event::<T, I>(
+			Event::BountyFundsReclaimed { bounty_id, amount: native_before.saturating_sub(native_after) }
+				.into(),
+		);
 
 		Ok(())
 	}

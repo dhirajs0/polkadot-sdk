@@ -457,7 +457,10 @@ pub mod pallet {
 			new_deposit: BalanceOf<T, I>,
 		},
 		/// Stranded funds left in a closed bounty's account were reclaimed to the treasury.
-		BountyFundsReclaimed { bounty_id: BountyIndex },
+		///
+		/// `amount` is the **native** balance moved back to the treasury. Any non-native assets
+		/// configured via `TransferAllAssets` are also swept but are not itemised here.
+		BountyFundsReclaimed { bounty_id: BountyIndex, amount: BalanceOf<T, I> },
 	}
 
 	/// Number of bounty proposals that have been made.
@@ -1072,6 +1075,10 @@ pub mod pallet {
 			let bounty_account = Self::bounty_account_id(bounty_id);
 			let treasury_account = Self::account_id();
 
+			// Measure the native balance before/after so the event can report how much native was
+			// reclaimed. Both reads hit `System::Account` for an account the sweep touches anyway.
+			let native_before = T::Currency::free_balance(&bounty_account);
+
 			let transferred = T::TransferAllAssets::force_transfer_all_assets(
 				&bounty_account,
 				&treasury_account,
@@ -1082,7 +1089,10 @@ pub mod pallet {
 				return Ok(Pays::Yes.into());
 			}
 
-			Self::deposit_event(Event::<T, I>::BountyFundsReclaimed { bounty_id });
+			let native_after = T::Currency::free_balance(&bounty_account);
+			let amount = native_before.saturating_sub(native_after);
+
+			Self::deposit_event(Event::<T, I>::BountyFundsReclaimed { bounty_id, amount });
 
 			Ok(Pays::No.into())
 		}

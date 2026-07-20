@@ -19,6 +19,10 @@ doc:
     but the bound is required in all builds. All current adopters already satisfy it
     — e.g. Asset Hub's `NativeAndAssets` union, since `pallet-assets`-backed fungibles
     implement `Create`.
+
+    The `BountyFundsReclaimed` event now carries an `amount` field reporting the
+    native balance moved back to the treasury (non-native assets are still swept but
+    not itemised in the event).
 crates:
 - name: pallet-bounties
   bump: major
