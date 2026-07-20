@@ -13,8 +13,12 @@ doc:
     locks and freezes are respected. The call is free on success and paid on a no-op,
     so it cannot be used to grief the network.
 
-    `pallet-bounties` now requires its `Currency` to also implement
-    `fungible::Mutate`.
+    The provided `TransferAllFungibles` helper now also requires its `Fungibles`
+    type to implement `fungibles::Create`. It is exercised only under
+    `runtime-benchmarks` (to seed assets so the benchmark performs real transfers),
+    but the bound is required in all builds. All current adopters already satisfy it
+    — e.g. Asset Hub's `NativeAndAssets` union, since `pallet-assets`-backed fungibles
+    implement `Create`.
 crates:
 - name: pallet-bounties
   bump: major
