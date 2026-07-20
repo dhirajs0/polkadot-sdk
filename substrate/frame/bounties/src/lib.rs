@@ -327,13 +327,7 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>:
-		frame_system::Config
-		+ pallet_treasury::Config<
-			I,
-			Currency: FungibleMutate<Self::AccountId, Balance = BalanceOf<Self, I>>,
-		>
-	{
+	pub trait Config<I: 'static = ()>: frame_system::Config + pallet_treasury::Config<I> {
 		/// The amount held on deposit for placing a bounty proposal.
 		#[pallet::constant]
 		type BountyDepositBase: Get<BalanceOf<Self, I>>;
@@ -822,19 +816,11 @@ pub mod pallet {
 					debug_assert!(children_fee <= fee);
 
 					let final_fee = fee.saturating_sub(children_fee);
-					let res = <T::Currency as Currency<_>>::transfer(
-						&bounty_account,
-						&curator,
-						final_fee,
-						AllowDeath,
-					); // should not fail
+					let res =
+						T::Currency::transfer(&bounty_account, &curator, final_fee, AllowDeath); // should not fail
 					debug_assert!(res.is_ok());
-					let res = <T::Currency as Currency<_>>::transfer(
-						&bounty_account,
-						&beneficiary,
-						payout,
-						AllowDeath,
-					); // should not fail
+					let res =
+						T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
 					debug_assert!(res.is_ok());
 
 					*maybe_bounty = None;
