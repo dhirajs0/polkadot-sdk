@@ -246,3 +246,70 @@ fn try_state_catches_unrequested_whitelisted_call() {
 		assert_ok!(Whitelist::do_try_state());
 	});
 }
+
+// The invariant is cross-pallet: `pallet-preimage`'s `ManagerOrigin` (root on production
+// runtimes) can drop the whitelist's request via the `unrequest_preimage` extrinsic without
+// touching `WhitelistedCall`, so `try_state` can start failing after a perfectly valid
+// (if ill-advised) governance action, not only after a whitelist-pallet bug.
+#[test]
+fn try_state_broken_by_external_preimage_unrequest() {
+	new_test_ext().execute_with(|| {
+		let call = RuntimeCall::System(frame_system::Call::remark { remark: vec![42] });
+		let call_hash = <Test as frame_system::Config>::Hashing::hash(&call.encode()[..]);
+
+		assert_ok!(Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash));
+		assert_ok!(Whitelist::do_try_state());
+
+		// Root (the preimage pallet's `ManagerOrigin`) clears the request out from under the
+		// whitelist pallet. The whitelist pallet is never informed.
+		assert_ok!(Preimage::unrequest_preimage(RuntimeOrigin::root(), call_hash));
+
+		assert!(!<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(crate::WhitelistedCall::<Test>::contains_key(call_hash));
+		assert!(Whitelist::do_try_state().is_err());
+	});
+}
+
+// A *noted* preimage is not enough: the invariant demands *requested*. A whitelisted call whose
+// preimage is merely noted is still dispatchable (`fetch` succeeds), but the note is unpinned —
+// its owner may `unnote_preimage` it at any time. `is_requested` is therefore the right check.
+#[test]
+fn try_state_fails_for_noted_but_unrequested_preimage() {
+	new_test_ext().execute_with(|| {
+		let call = RuntimeCall::System(frame_system::Call::remark { remark: vec![7] });
+		let encoded = call.encode();
+		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded[..]);
+		// A *user*-noted preimage (with depositor) is `Unrequested`; `StorePreimage::note`
+		// (depositor-less) would instead note *and* request it.
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), encoded));
+
+		// Bypass `whitelist_call` so no request is placed.
+		crate::WhitelistedCall::<Test>::insert(call_hash, ());
+
+		// The call is fetchable, yet the state is inconsistent: nothing pins the preimage.
+		assert!(<Preimage as QueryPreimage>::fetch(&call_hash, None).is_ok());
+		assert!(!<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(Whitelist::do_try_state().is_err());
+	});
+}
+
+// Request counting in `pallet-preimage` keeps the invariant safe when several parties request
+// the same hash: the whitelist pallet's `unrequest` on removal only decrements the count, so an
+// unrelated outstanding request survives and no underflow or false positive occurs.
+#[test]
+fn try_state_holds_with_shared_request_count() {
+	test(|| {
+		let call = RuntimeCall::System(frame_system::Call::remark { remark: vec![9] });
+		let call_hash = <Test as frame_system::Config>::Hashing::hash(&call.encode()[..]);
+
+		// Someone else (e.g. another pallet) requests the hash first.
+		<Preimage as QueryPreimage>::request(&call_hash);
+
+		assert_ok!(Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash));
+		assert_ok!(Whitelist::do_try_state());
+
+		// Removing the whitelisting decrements the count; the external request remains.
+		assert_ok!(Whitelist::remove_whitelisted_call(RuntimeOrigin::root(), call_hash));
+		assert!(<Preimage as QueryPreimage>::is_requested(&call_hash));
+	});
+}
