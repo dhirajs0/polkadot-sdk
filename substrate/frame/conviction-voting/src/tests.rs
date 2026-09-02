@@ -24,8 +24,8 @@ use frame_support::{
 	traits::{
 		fungible::{InspectFreeze, MutateHold},
 		tokens::Precision,
-		ConstU32, ConstU64, Contains, Currency, LockableCurrency, Polling, VariantCount,
-		VoteTally, WithdrawReasons,
+		ConstU32, ConstU64, Contains, Currency, LockableCurrency, Polling, VariantCount, VoteTally,
+		WithdrawReasons,
 	},
 };
 use sp_runtime::BuildStorage;
