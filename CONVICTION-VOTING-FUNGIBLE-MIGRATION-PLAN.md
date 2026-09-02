@@ -29,6 +29,25 @@ commit each, plus a storage migration that moves every voter's on-chain `Locks` 
 | 5 | wire the 5 in-repo runtimes | Step 5 | `SKIP_WASM_BUILD=1 cargo check` per runtime |
 | 6 | prdoc | Step 6 | prdoc schema check |
 
+### As-built deviations (recorded after implementation)
+
+1. **A `cargo fmt` + lockfile tidy commit** sits between commits 4 and 5 (line re-wrapping in
+   the pallet, `Cargo.lock` entry for the new `log` dependency).
+2. **The two staking-async test runtimes get only the `RuntimeFreezeReason` wiring, no
+   migration**: both always start from fresh genesis (their `Migrations` comment says so), and
+   at genesis every pallet writes its in-code storage version — v1 — so there is nothing to
+   migrate and `VersionedMigration` would never fire anyway.
+3. **Benchmark funding uses `max_value() / 10`, not `max_value()`**: `fungible::Mutate::
+   set_balance` *mints* the difference into `TotalIssuance` and errors on overflow, unlike the
+   old `make_free_balance_be`, which wrote free balance with a saturating issuance adjustment.
+   Funding two accounts with `max_value()` each silently failed and broke every benchmark with
+   `InsufficientFunds`. 📚 *Principle: legacy→fungible swaps change failure modes, not just
+   names — audit each replaced call for its error behavior, not only its happy path.*
+4. **The mock needed explicit `FreezeIdentifier`/`MaxFreezes` overrides**: `derive_impl`
+   resolves the prelude's `type FreezeIdentifier = Self::RuntimeFreezeReason` against the
+   *prelude struct* (where `RuntimeFreezeReason = ()`), not against the overriding impl, so
+   overriding only `RuntimeFreezeReason` left `FreezeIdentifier = ()`.
+
 ```mermaid
 flowchart LR
     P["1 · plan doc"] --> C["2 · pallet core swap\n(lib.rs + mock + tests)"]
