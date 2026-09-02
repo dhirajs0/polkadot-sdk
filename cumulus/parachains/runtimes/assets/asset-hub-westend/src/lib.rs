@@ -2034,6 +2034,8 @@ pub type Migrations = (
 	// incentive formula applies; pending pre-cutoff eras keep the legacy
 	// stake-only share, avoiding a `HistoryDepth × MaxValidatorSet` backfill.
 	pallet_staking_async::migrations::SetWeightedPointsFormulaStartEra<Runtime>,
+	// unreleased: conviction-voting lock -> freeze
+	pallet_conviction_voting::migrations::MigrateV0ToV1<Runtime, Balances>,
 );
 
 /// Asset Hub Westend has some undecodable storage, delete it.
