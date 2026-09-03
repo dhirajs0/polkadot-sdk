@@ -1459,6 +1459,9 @@ impl pallet_migrations::Config for Runtime {
 			pallet_assets_precompiles::weights::SubstrateWeight<Runtime>,
 		>,
 		pallet_revive::migrations::v3::Migration<Runtime>,
+		// unreleased: conviction-voting lock -> freeze (multi-block: too many voters for a
+		// single block)
+		pallet_conviction_voting::migrations::stepped::VoteLockToFreeze<Runtime, Balances>,
 	);
 	// Benchmarks need mocked migrations to guarantee that they succeed.
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1863,8 +1866,6 @@ pub type Migrations = (
 	// incentive formula applies; pending pre-cutoff eras keep the legacy
 	// stake-only share, avoiding a `HistoryDepth × MaxValidatorSet` backfill.
 	pallet_staking_async::migrations::SetWeightedPointsFormulaStartEra<Runtime>,
-	// unreleased: conviction-voting lock -> freeze
-	pallet_conviction_voting::migrations::MigrateV0ToV1<Runtime, Balances>,
 );
 
 /// Executive: handles dispatch to the various modules.

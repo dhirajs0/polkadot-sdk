@@ -16,10 +16,11 @@ doc:
     - add `type RuntimeFreezeReason = RuntimeFreezeReason;` to the pallet's `Config` impl;
     - make sure `pallet_balances::Config::FreezeIdentifier` is `RuntimeFreezeReason` and
       `MaxFreezes` accounts for the new variant (e.g. `VariantCountOf<RuntimeFreezeReason>`);
-    - schedule `pallet_conviction_voting::migrations::MigrateV0ToV1<Runtime, Balances>` to move
-      existing `pyconvot` locks over to freezes. The migration iterates all voters in a single
-      block; chains with large voter counts must convert it to a multi-block/stepped migration
-      before adopting this release.
+    - schedule one of the two provided migrations to move existing `pyconvot` locks over to
+      freezes: `migrations::MigrateV0ToV1<Runtime, Balances>` (single-block, for chains with
+      few voters) or `migrations::stepped::VoteLockToFreeze<Runtime, Balances>` (multi-block,
+      via `pallet-migrations`, for chains with large voter counts — required for
+      Polkadot/Kusama Asset Hub scale). Wire exactly one of them.
 crates:
 - name: pallet-conviction-voting
   bump: major

@@ -52,6 +52,8 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type Block = Block;
 	type AccountData = pallet_balances::AccountData<u64>;
+	// Non-zero DB weights so the stepped migration's per-account weight is meterable in tests.
+	type DbWeight = frame_support::weights::constants::RocksDbWeight;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
